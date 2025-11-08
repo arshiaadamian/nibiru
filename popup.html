@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quick Summary</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body class="dark">
+  <div class="popup">
+    <header class="header">
+      <div class="header-content">
+        <div class="app-icon">📄</div>
+        <h1>Quick Summary</h1>
+      </div>
+      <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">🌙</button>
+    </header>
+
+    <main class="content">
+      <div class="summary-box">
+        <div id="summaryArea" class="summary-text">
+          <p class="placeholder">Click a document or link to generate a summary.</p>
+        </div>
+      </div>
+    </main>
+
+    <footer class="actions">
+      <button id="copyBtn" class="action-btn">
+        <span class="btn-icon">📋</span>
+        <span class="btn-text">Copy</span>
+      </button>
+      <button id="downloadBtn" class="action-btn">
+        <span class="btn-icon">⬇️</span>
+        <span class="btn-text">PDF</span>
+      </button>
+      <button id="notionBtn" class="action-btn">
+        <span class="btn-icon">🧠</span>
+        <span class="btn-text">Notion</span>
+      </button>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast"></div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

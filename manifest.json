@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Quick Summary",
+  "version": "1.0.0",
+  "description": "A beautiful Chrome extension for quick document summaries",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Quick Summary"
+  }
+}
+
