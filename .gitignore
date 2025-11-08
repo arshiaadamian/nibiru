@@ -1,0 +1,29 @@
+# Environment variables
+.env
+.env.local
+.env.*.local
+nibiru/.env
+
+# Dependencies
+node_modules/
+package-lock.json
+
+# Output files
+nibiru/test-summary-output.txt
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Test files (optional - uncomment if you don't want to track test files)
+# test-*.js
+# test-summarize.js
+# test-html.js
+
