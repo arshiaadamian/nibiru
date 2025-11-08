@@ -232,14 +232,20 @@ body.dark h1 {
   transition: all 0.2s ease;
 }
 
-.summarize-btn:hover {
+.summarize-btn:hover:not(:disabled) {
   background: linear-gradient(135deg, #454e57, #2c353d);
   transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(44, 53, 61, 0.5);
 }
 
-.summarize-btn:active {
+.summarize-btn:active:not(:disabled) {
   transform: translateY(0);
+}
+
+.summarize-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+  pointer-events: none;
 }
 
 .summarize-btn i {

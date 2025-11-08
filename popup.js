@@ -172,7 +172,20 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Summarize button
     const loadingBar = document.getElementById("loadingBar");
+    let isGenerating = false;
+    
     summarizeBtn.addEventListener("click", () => {
+        // Prevent spam clicking
+        if (isGenerating || summarizeBtn.disabled) {
+            return;
+        }
+        
+        // Disable button and set generating state
+        isGenerating = true;
+        summarizeBtn.disabled = true;
+        summarizeBtn.style.cursor = "not-allowed";
+        summarizeBtn.style.opacity = "0.6";
+        
         // Hide summary area and show loading bar
         if (summaryArea) summaryArea.style.display = "none";
         if (loadingBar) loadingBar.style.display = "flex";
@@ -262,6 +275,12 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (loadingProgress) {
                     loadingProgress.textContent = "0%";
                 }
+                
+                // Re-enable button after animation completes
+                isGenerating = false;
+                summarizeBtn.disabled = false;
+                summarizeBtn.style.cursor = "pointer";
+                summarizeBtn.style.opacity = "1";
             }, 1000);
         };
         
