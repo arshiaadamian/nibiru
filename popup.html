@@ -29,9 +29,19 @@
         <span class="status-icon"><i class="bi bi-x-circle-fill"></i></span>
         <span class="status-text">Not Ready</span>
       </div>
+      <label class="ready-toggle-switch">
+        <input type="checkbox" id="readyToggle">
+        <span class="toggle-slider"></span>
+      </label>
     </div>
 
     <main class="content">
+      <div id="summarizeBtnContainer" class="summarize-btn-container" style="display: none;">
+        <button id="summarizeBtn" class="summarize-btn">
+          <i class="bi bi-stars"></i>
+          <span>Generate Summary</span>
+        </button>
+      </div>
       <div class="summary-box">
         <div id="summaryArea" class="summary-text">
           <div class="empty-state">
@@ -60,6 +70,37 @@
 
   <div id="toast" class="toast"></div>
 
+  <!-- Ancient Planet Animation Overlay -->
+  <div id="planetOverlay" class="planet-overlay">
+    <div class="star-field">
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+      <div class="star"></div>
+    </div>
+    <div class="planet-container">
+      <div class="planet">
+        <div class="planet-surface">
+          <div class="planet-crater"></div>
+          <div class="planet-crater"></div>
+          <div class="planet-crater"></div>
+        </div>
+        <div class="planet-ring"></div>
+        <div class="planet-glow"></div>
+      </div>
+      <div class="ancient-symbols">
+        <div class="symbol symbol-1">✦</div>
+        <div class="symbol symbol-2">✧</div>
+        <div class="symbol symbol-3">✶</div>
+      </div>
+    </div>
+  </div>
+
   <script src="popup.js"></script>
 </body>
 </html>
+

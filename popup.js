@@ -5,29 +5,52 @@ document.addEventListener("DOMContentLoaded", () => {
     const statusIndicator = document.getElementById("statusIndicator");
     const statusText = statusIndicator.querySelector(".status-text");
     const statusIcon = statusIndicator.querySelector(".status-icon i");
+    const planetOverlay = document.getElementById("planetOverlay");
+    const summarizeBtnContainer = document.getElementById("summarizeBtnContainer");
+    const summarizeBtn = document.getElementById("summarizeBtn");
+    const readyToggle = document.getElementById("readyToggle");
+    let isInitialLoad = true;
+    
+    // Planet animation control
+    function showPlanetAnimation(duration = 2000) {
+        planetOverlay.classList.add("active");
+        setTimeout(() => {
+            planetOverlay.classList.remove("active");
+        }, duration);
+    }
     
     // Status management
-    function setStatus(ready) {
+    function setStatus(ready, showAnimation = false) {
         if (ready) {
             statusIndicator.classList.add("ready");
             statusIndicator.classList.remove("not-ready");
             statusText.textContent = "Ready to Summarize";
             statusIcon.className = "bi bi-check-circle-fill";
+            // Show summarize button when ready
+            summarizeBtnContainer.style.display = "flex";
+            readyToggle.checked = true;
+            // Show planet animation when status becomes ready (but not on initial load)
+            if (showAnimation && !isInitialLoad) {
+                showPlanetAnimation(2000);
+            }
         } else {
             statusIndicator.classList.add("not-ready");
             statusIndicator.classList.remove("ready");
             statusText.textContent = "Not Ready";
             statusIcon.className = "bi bi-x-circle-fill";
+            // Hide summarize button when not ready
+            summarizeBtnContainer.style.display = "none";
+            readyToggle.checked = false;
         }
     }
     
     // Initialize status (you can change this based on your logic)
     // For now, checking if there's content to summarize
-    function checkStatus() {
+    function checkStatus(showAnimation = false) {
         const placeholder = summaryArea.querySelector(".empty-state");
         const hasContent = !placeholder && summaryArea.textContent.trim() !== "" && 
                           summaryArea.textContent.trim() !== "No summary available yet. Navigate to a document or webpage to generate a summary.";
-        setStatus(hasContent);
+        setStatus(hasContent, showAnimation);
     }
     
     // Function to update summary content
@@ -38,7 +61,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         if (text && text.trim()) {
-            summaryArea.innerHTML = `<p>${text}</p>`;
+            // Show planet animation when generating summary
+            showPlanetAnimation(2500);
+            // Delay the content update slightly to show animation
+            setTimeout(() => {
+                summaryArea.innerHTML = `<p>${text}</p>`;
+                checkStatus(true);
+            }, 500);
         } else {
             summaryArea.innerHTML = `
                 <div class="empty-state">
@@ -46,8 +75,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p>No summary available yet. Navigate to a document or webpage to generate a summary.</p>
                 </div>
             `;
+            checkStatus(false);
         }
-        checkStatus();
     }
     
     // Theme management
@@ -75,12 +104,14 @@ document.addEventListener("DOMContentLoaded", () => {
             if (result.summary) {
                 updateSummary(result.summary);
             } else {
-                checkStatus();
+                checkStatus(false);
             }
+            isInitialLoad = false;
         });
     } else {
         applyTheme("dark");
-        checkStatus();
+        checkStatus(false);
+        isInitialLoad = false;
     }
     
     // Theme toggle
@@ -115,19 +146,47 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
         
+        showPlanetAnimation(1500);
         navigator.clipboard.writeText(textToCopy).then(() => {
-            showToast("Summary copied!");
+            setTimeout(() => {
+                showToast("Summary copied!");
+            }, 1500);
         }).catch(() => {
             showToast("Failed to copy");
         });
     });
     
     document.getElementById("downloadBtn").addEventListener("click", () => {
-        showToast("PDF download coming soon!");
+        showPlanetAnimation(1500);
+        setTimeout(() => {
+            showToast("PDF download coming soon!");
+        }, 1500);
     });
     
     document.getElementById("notionBtn").addEventListener("click", () => {
-        showToast("Notion export coming soon!");
+        showPlanetAnimation(1500);
+        setTimeout(() => {
+            showToast("Notion export coming soon!");
+        }, 1500);
+    });
+    
+    // Summarize button
+    summarizeBtn.addEventListener("click", () => {
+        showPlanetAnimation(3000);
+        showToast("Generating summary...");
+        
+        // Simulate summary generation (replace with actual API call)
+        setTimeout(() => {
+            const sampleSummary = "This is a sample summary generated by Nibiru. The extension is working correctly and ready to summarize BCIT course materials, documents, and web pages. The ancient planet animation represents the mystical power of Nibiru, bringing knowledge from the cosmos to BCIT students.";
+            updateSummary(sampleSummary);
+            showToast("Summary generated!");
+        }, 3000);
+    });
+    
+    // Test toggle for ready status
+    readyToggle.addEventListener("change", (e) => {
+        const isReady = e.target.checked;
+        setStatus(isReady, true);
     });
     
     // Listen for messages from content script or background
@@ -138,6 +197,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (chrome.storage) {
                     chrome.storage.local.set({ summary: request.summary });
                 }
+            } else if (request.action === "showPlanet") {
+                showPlanetAnimation(request.duration || 2000);
             }
         });
     }
