@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Test</title>
+       <p>
+        Page 1 of 5
+Assignment 1 Comp 2510
+Section 1
+Due Sunday, October 4th, 2025, 11:59 PM in the Learning Hub Assignment drop box.
+Read the entire assignment carefully, especially the sections about assignment
+preparation and Plagiarism / Collaboration. The assignment is intended to help you
+practice programming, not to assess your programming skills.
+This is an individual assignment
+There are four programming projects, worth a total of 20 marks.
+Project 1: Write a program that requests the download speed in megabits per second
+(Mbs) and the size of a file in megabytes (MB). The program should calculate the
+download time for the file. Note that in this context one byte is eight bits. Use type float,
+and use / for division. The program should report all three values (download speed, file
+size, and download time) showing two digits to the right of the decimal point, as in the
+following:
+At 18.12 megabits per second, a file of 2.20 megabytes downloads in 0.97 seconds.
+Project 2: Write a program that asks the user to enter a height in centimeters and then
+displays the height in centimeters and in feet and inches. Fractional centimeters and
+inches should be allowed, and the program should allow the user to continue entering
+heights until a nonpositive value is entered. A sample run should look like this:
+Enter a height in centimeters: 182
+182.0 cm = 5 feet, 11.7 inches
+Enter a height in centimeters (<=0 to quit): 168.7
+168.0 cm = 5 feet, 6.4 inches
+Enter a height in centimeters (<=0 to quit): 0
+bye
+Project 3: Write a program that requests lower and upper integer limits, calculates the sum
+of all the integer squares from the square of the lower limit to the square of the upper limit,
+and displays the answer. The program should then continue to prompt for limits and display
+answers until the user enters an upper limit that is equal to or less than the lower limit. A
+sample run should look something like this:
+Enter lower and upper integer limits: 5 9
+The sums of the squares from 25 to 81 is 255
+Enter next set of limits: 3 25
+The sums of the squares from 9 to 625 is 5520
+Enter next set of limits: 5 5
+Done
+Page 2 of 5
+Project 4: Write a program that initializes an array-of-double and then copies the contents
+of the array into three other arrays. (All four arrays should be declared in the main
+program.) To make the first copy, use a function with array notation. To make the second
+copy, use a function with pointer notation and pointer incrementing. Have the first two
+functions take as arguments the name of the target array, the name of the source array, and
+the number of elements to be copied. Have the third function take as arguments the name of
+the target, the name of the source, and a pointer to the element following the last element of
+the source. That is, the function calls would look like this, given the following declarations:
+double source[5] = {1.1, 2.2, 3.3, 4.4, 5.5};
+double target1[5];
+double target2[5];
+double target3[5];
+copy_arr(target1, source, 5);
+copy_ptr(target2, source, 5);
+copy_ptrs(target3, source, source + 5);
+Section 2
+Comments and documentation Details:
+Do not create comments for the sake of creating comments. Focus is on quality not on
+quantity. Comments should be succinct and to the point. If you can be brief, then do so.
+Please use English that is grammatically correct.
+Tutorial on C docs:
+https://learn.microsoft.com/en-us/cpp/c-language/?view=msvc-170
+Section 3
+Assignment Grading
+The grade for this assignment will be assigned out of 20 points.
+• up to 4 points for commenting and following the style guide, and
+• up to 16 points for correctness.
+Section 4
+Schedule
+Your project is due on the assigned date at the assigned time. Late assignments will
+count as zero (exceptions without a medical note). It will be your responsibility to
+ensure that you’ve submitted the appropriate files and that you’ve done so on time.
+How to hand in COMP 2510 Assignments (details)
+1) Use clear and consistent names: name_assignment1.c
+Page 3 of 5
+2) At the very top of your .c file, include a block comment with:
+/*
+* Course: COMP 2510
+* Assignment: Assignment 1
+* Name: Your Full Name
+* Student ID: 12345678
+* Date: 2025-09-18
+* Description: (short explanation of what the program does)
+*/
+3) Add screenshots for running each problem.
+4) Upload your file into the D2L dropbox. This must be before the due date and
+time.
+Page 4 of 5
+Section 6
+Plagiarism and Collaboration on Programming Projects
+The assignment you turn in must represent your own work and not the work of anyone
+else (including work obtained through internet searches or AI assistance). On the other
+hand, it is unreasonable to expect that you will work in a complete vacuum, without ever
+speaking to a classmate. The purpose of this section is to give you guidance about the
+areas in which it is appropriate to discuss assignment topics with your classmates.
+Violating these guidelines may result in a charge of academic dishonesty.
+Plagiarism
+The term plagiarism describes an attempt to claim work as your own, which you have
+copied from another person (living, dead, or AI), whether that other person knows about
+it or not. In a class like this, plagiarism includes copying program code, data,
+documentation, etc. Plagiarism is simply not allowed. If you submit another student's
+work as your own, you will be charged with a violation of the BCIT Academic Integrity
+Code.
+Collaboration
+Collaboration is defined as two or more students working together on a phase of a
+project. Working together does not mean that one student does the work and the other
+student just copies it! Collaboration is allowed under certain conditions, if you are honest
+about it.
+You are taking this class to learn important fundamental things about computing, and we
+must give you a grade that fairly represents what we think you've learned. Therefore, we
+need to know that your work is your own work, so we need to limit the collaboration
+somewhat. For purposes of projects in this class, here are some guidelines as to which
+phases of a project are appropriate for collaboration, and which are inappropriate. This
+may change from assignment to assignment.
+OK Preliminary analysis of problem
+OK Developing an algorithm
+OK Developing a plan for testing
+NO Coding
+NO Proof-reading the program before compiling
+OK Interpreting errors at compilation time
+OK Interpreting errors at execution time
+NO Testing
+Page 5 of 5
+Working in pairs
+If the assignment explicitly allows or requires people to work in pairs, then both names
+must appear on the one assignment, which is handed in for the pair. In this case, the rules
+on collaboration apply to the students in that pair collaborating with anyone else.
+Save Your Projects!
+You are required to save a copy of all your projects until the end of the semester, after
+grades have been reported. Be prepared to re-submit these to the instructor if he or she
+asks you to do so.
+Protect Yourself
+If you suspect that another student is misusing your work (for example, one of your
+printouts disappeared), report this immediately to the instructor, to protect yourself
+against a charge of plagiarism if another student copies your work. If there is ever any
+confusion as to who copied from who, it is institute policy to charge both with plagiarism
+and punish both (or all) parties.
+Read the BCIT Policy on Conduct carefully.
+       </p>
+    </head>
+</html>
