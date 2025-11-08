@@ -43,6 +43,54 @@
         </button>
       </div>
       <div class="summary-box">
+        <div id="loadingBar" class="solar-loading-bar" style="display: none;">
+          <div class="space-scene">
+            <div class="space-background">
+              <div class="star star-1"></div>
+              <div class="star star-2"></div>
+              <div class="star star-3"></div>
+              <div class="star star-4"></div>
+              <div class="star star-5"></div>
+              <div class="star star-6"></div>
+              <div class="star star-7"></div>
+              <div class="star star-8"></div>
+            </div>
+            <div class="planets-container">
+              <div class="planet-marker planet-1-marker">
+                <img src="images/earth.svg" alt="Earth" class="planet-img planet-earth-img" />
+                <div class="planet-tooltip">Earth</div>
+              </div>
+              <div class="planet-marker planet-2-marker">
+                <img src="images/venus.png" alt="Venus" class="planet-img planet-venus-img" />
+                <div class="planet-tooltip">Venus</div>
+              </div>
+              <div class="planet-marker planet-3-marker">
+                <img src="images/saturn.svg" alt="Saturn" class="planet-img planet-saturn-img" />
+                <div class="planet-tooltip">Saturn</div>
+              </div>
+              <div class="planet-marker planet-4-marker">
+                <img src="images/blue-planet.svg" alt="Neptune" class="planet-img planet-neptune-img" />
+                <div class="planet-tooltip">Neptune</div>
+              </div>
+            </div>
+            <div class="rocket-container" id="rocketContainer">
+              <div class="rocket-wrapper">
+                <img src="images/rocket.png" alt="Rocket" class="rocket-img" />
+                <div class="rocket-flame"></div>
+                <div class="exhaust-particles">
+                  <div class="particle particle-1"></div>
+                  <div class="particle particle-2"></div>
+                  <div class="particle particle-3"></div>
+                  <div class="particle particle-4"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="loading-text">
+            <span class="loading-text-glow">Generating summary</span>
+            <span class="loading-progress" id="loadingProgress">0%</span>
+          </p>
+        </div>
         <div id="summaryArea" class="summary-text">
           <div class="empty-state">
             <i class="bi bi-file-text-empty"></i>
