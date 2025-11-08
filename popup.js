@@ -475,16 +475,33 @@ document.addEventListener("DOMContentLoaded", () => {
         // Hide loading bar
         if (loadingBar) loadingBar.style.display = "none";
         
+        // Format error message with line breaks
+        const formattedError = errorMessage.replace(/\n/g, '<br>');
+        
+        // Determine error type and styling
+        let errorIcon = "bi-exclamation-triangle-fill";
+        let errorColor = "#ef4444";
+        let helpText = "";
+        
+        if (errorMessage.includes('Quota') || errorMessage.includes('quota')) {
+            errorIcon = "bi-hourglass-split";
+            errorColor = "#f59e0b";
+            helpText = '<p style="font-size: 12px; margin-top: 8px; color: #f59e0b;">💡 Tip: Free tier quotas reset daily. You can also enable billing (free tier remains free) to get higher limits.</p>';
+        } else if (errorMessage.includes('API key')) {
+            helpText = '<p style="font-size: 12px; margin-top: 8px;">Please set your Gemini API key in the extension settings.</p>';
+        } else if (errorMessage.includes('not enabled') || errorMessage.includes('not found')) {
+            helpText = '<p style="font-size: 12px; margin-top: 8px;">Make sure the Generative Language API is enabled in Google Cloud Console.</p>';
+        }
+        
         // Show error in summary area
         if (summaryArea) {
             summaryArea.style.display = "block";
             summaryArea.innerHTML = `
-                <div class="empty-state" style="color: #ef4444;">
-                    <i class="bi bi-exclamation-triangle-fill"></i>
-                    <p><strong>Error:</strong> ${errorMessage}</p>
-                    ${errorMessage.includes('API key') ? 
-                        '<p style="font-size: 12px; margin-top: 8px;">Please set your Gemini API key in the extension settings.</p>' : 
-                        ''}
+                <div class="empty-state" style="color: ${errorColor};">
+                    <i class="bi ${errorIcon}"></i>
+                    <p><strong>Error:</strong></p>
+                    <p style="text-align: left; white-space: pre-line; font-size: 12px; line-height: 1.6;">${formattedError}</p>
+                    ${helpText}
                 </div>
             `;
         }

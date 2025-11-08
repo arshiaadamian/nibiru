@@ -165,7 +165,7 @@ function extractPageContent() {
 async function summarizeNibiruAuto(text, context, options = {}) {
     const {
         apiKey,
-        model = "gemini-pro",
+        model = "gemini-1.5-flash-latest",
         temperature = 0.3,
         maxTokens = 1200,
         preferClassifier = false,
@@ -205,53 +205,74 @@ SOURCE (snippet, may include HTML):
 ${body.slice(0, 2000)}
         `.trim();
 
-        // Try v1 endpoint first (more stable)
-        let url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-        let res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `You are a strict labeler that outputs one token only.\n\n${clsPrompt}`
-                    }]
-                }],
-                generationConfig: {
-                    temperature: 0.0,
-                    maxOutputTokens: 4
-                }
-            })
-        });
+        // Use simpler model list for classification (faster)
+        const modelVariants = [
+            "gemini-1.5-flash",
+            "gemini-1.5-pro",
+            "gemini-pro"
+        ];
         
-        const data = await res.json();
-        if (!res.ok) {
-            // If 404, try v1beta as fallback
-            if (res.status === 404) {
-                url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-                res = await fetch(url, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                        contents: [{
-                            parts: [{
-                                text: `You are a strict labeler that outputs one token only.\n\n${clsPrompt}`
-                            }]
-                        }],
-                        generationConfig: {
-                            temperature: 0.0,
-                            maxOutputTokens: 4
-                        }
-                    })
-                });
-                const fallbackData = await res.json();
-                if (!res.ok) {
-                    throw new Error(`Gemini API Error: ${res.status} ${res.statusText}. Model "${model}" not found. Try using "gemini-pro".\n${JSON.stringify(fallbackData)}`);
+        const apiVersions = ["v1beta", "v1"];
+        
+        let lastError = null;
+        let res = null;
+        let data = null;
+        
+        // Try each model variant and API version (limited attempts for classification)
+        for (const apiVersion of apiVersions) {
+            for (const modelVariant of modelVariants) {
+                try {
+                    const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelVariant}:generateContent?key=${apiKey}`;
+                    res = await fetch(url, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            contents: [{
+                                parts: [{
+                                    text: `You are a strict labeler that outputs one token only.\n\n${clsPrompt}`
+                                }]
+                            }],
+                            generationConfig: {
+                                temperature: 0.0,
+                                maxOutputTokens: 4
+                            }
+                        })
+                    });
+                    
+                    data = await res.json();
+                    
+                    // If successful, break out of loops
+                    if (res.ok) {
+                        break;
+                    } else if (res.status === 401 || res.status === 403) {
+                        // Auth error - fall back to heuristic
+                        console.warn(`AI classification auth error. Using heuristic classification.`);
+                        return heuristicCategory(ctx, body);
+                    } else if (res.status !== 404) {
+                        // If it's not a 404, stop trying
+                        lastError = data.error?.message || data.message || JSON.stringify(data);
+                        break;
+                    } else {
+                        lastError = data.error?.message || data.message || `Model ${modelVariant} not found`;
+                    }
+                } catch (fetchError) {
+                    lastError = fetchError.message;
+                    continue;
                 }
-                const label = (fallbackData.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
-                return label === "ASSIGNMENT" ? "ASSIGNMENT" : "GENERAL";
             }
-            throw new Error(`Gemini API Error: ${res.status} ${res.statusText}\n${JSON.stringify(data)}`);
+            
+            // If we got a successful response, break out of API version loop
+            if (res && res.ok) {
+                break;
+            }
         }
+        
+        if (!res || !res.ok) {
+            // If classification fails, fall back to heuristic
+            console.warn(`AI classification failed: ${lastError || JSON.stringify(data)}. Using heuristic classification.`);
+            return heuristicCategory(ctx, body);
+        }
+        
         const label = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
         return label === "ASSIGNMENT" ? "ASSIGNMENT" : "GENERAL";
     }
@@ -434,50 +455,181 @@ ${text}
         `.trim();
     }
 
-    // Call Gemini API - try v1 endpoint first (more stable)
-    let url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
-    let res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-            contents: [{
-                parts: [{
-                    text: `You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary.\n\n${prompt}`
-                }]
-            }],
-            generationConfig: {
-                temperature: temperature,
-                maxOutputTokens: maxTokens
-            }
-        })
-    });
-    
-    let data = await res.json();
-    
-    // If 404, try v1beta as fallback
-    if (!res.ok && res.status === 404) {
-        url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
-        res = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                contents: [{
-                    parts: [{
-                        text: `You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary.\n\n${prompt}`
-                    }]
-                }],
-                generationConfig: {
-                    temperature: temperature,
-                    maxOutputTokens: maxTokens
+    // Helper function to list available models
+    async function listAvailableModels(apiKey) {
+        const apiVersions = ["v1beta", "v1"];
+        for (const apiVersion of apiVersions) {
+            try {
+                const listUrl = `https://generativelanguage.googleapis.com/${apiVersion}/models?key=${apiKey}`;
+                const listRes = await fetch(listUrl);
+                if (listRes.ok) {
+                    const listData = await listRes.json();
+                    if (listData.models && listData.models.length > 0) {
+                        // Filter models that support generateContent
+                        const availableModels = listData.models
+                            .filter(m => m.supportedGenerationMethods && m.supportedGenerationMethods.includes('generateContent'))
+                            .map(m => m.name.replace('models/', ''));
+                        console.log('Available Gemini models:', availableModels);
+                        return { models: availableModels, apiVersion };
+                    }
                 }
-            })
-        });
-        data = await res.json();
+            } catch (e) {
+                console.log(`Failed to list models from ${apiVersion}:`, e);
+            }
+        }
+        return null;
+    }
+
+    // Try to get available models first
+    let availableModels = null;
+    let workingApiVersion = null;
+    try {
+        const modelList = await listAvailableModels(apiKey);
+        if (modelList && modelList.models.length > 0) {
+            availableModels = modelList.models;
+            workingApiVersion = modelList.apiVersion;
+        }
+    } catch (e) {
+        console.warn('Could not list available models, using default list:', e);
+    }
+
+    // Use available models if we got them, otherwise use default list
+    const modelVariants = availableModels || [
+        "gemini-1.5-flash",
+        "gemini-1.5-pro",
+        "gemini-pro",
+        "gemini-1.5-flash-002",
+        "gemini-1.5-pro-002"
+    ];
+    
+    const apiVersions = workingApiVersion ? [workingApiVersion] : ["v1beta", "v1"];
+    
+    let lastError = null;
+    let res = null;
+    let data = null;
+    let successfulModel = null;
+    let successfulApiVersion = null;
+    
+    // Try each model variant and API version combination
+    for (const apiVersion of apiVersions) {
+        for (const modelVariant of modelVariants) {
+            try {
+                const url = `https://generativelanguage.googleapis.com/${apiVersion}/models/${modelVariant}:generateContent?key=${apiKey}`;
+                res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary.\n\n${prompt}`
+                            }]
+                        }],
+                        generationConfig: {
+                            temperature: temperature,
+                            maxOutputTokens: maxTokens
+                        }
+                    })
+                });
+                
+                data = await res.json();
+                
+                // If successful, break out of loops
+                if (res.ok) {
+                    successfulModel = modelVariant;
+                    successfulApiVersion = apiVersion;
+                    console.log(`Successfully using model: ${modelVariant} with API version: ${apiVersion}`);
+                    break;
+                } else if (res.status === 401 || res.status === 403) {
+                    // Authentication/permission error - don't try other models
+                    lastError = data.error?.message || data.message || `Authentication error: ${res.status}`;
+                    throw new Error(`Gemini API Authentication Error: ${lastError}. Please check your API key and ensure the Gemini API is enabled in Google Cloud Console.`);
+                } else if (res.status === 429) {
+                    // Rate limit/quota exceeded - extract retry time if available
+                    const errorMsg = data.error?.message || data.message || JSON.stringify(data);
+                    const retryAfterMatch = errorMsg.match(/retry in ([\d.]+)s/i) || errorMsg.match(/(\d+\.?\d*)\s*seconds?/i);
+                    const retryAfter = retryAfterMatch ? Math.ceil(parseFloat(retryAfterMatch[1])) : 60;
+                    lastError = errorMsg;
+                    
+                    // Check if it's a quota issue (limit: 0 usually means billing not enabled)
+                    if (errorMsg.includes('quota') || errorMsg.includes('Quota exceeded') || errorMsg.includes('limit: 0')) {
+                        const hasBillingIssue = errorMsg.includes('limit: 0');
+                        const billingHelp = hasBillingIssue 
+                            ? `\n\n🔑 IMPORTANT: Your quota limit is 0, which usually means billing is not enabled.\n\nEven though the free tier is free, Google requires billing to be enabled:\n1. Go to: https://console.cloud.google.com/billing\n2. Link a billing account to your project\n3. You won't be charged for free tier usage\n4. This will increase your quota limits\n\nOr wait ${retryAfter} seconds for the quota to reset.`
+                            : `\n\nOptions:\n1. Wait ${retryAfter} seconds and try again (quota resets)\n2. Enable billing in Google Cloud Console for higher limits\n3. Check your usage: https://ai.dev/usage?tab=rate-limit`;
+                        
+                        throw new Error(`Gemini API Quota Exceeded${billingHelp}`);
+                    } else {
+                        // Rate limit - can retry
+                        throw new Error(`Gemini API Rate Limit: ${errorMsg}\n\nPlease retry in ${retryAfter} seconds.`);
+                    }
+                } else if (res.status !== 404) {
+                    // If it's not a 404, it's a different error, stop trying
+                    lastError = data.error?.message || data.message || JSON.stringify(data);
+                    break;
+                } else {
+                    // 404 means model not found, try next variant
+                    lastError = data.error?.message || data.message || `Model ${modelVariant} not found`;
+                }
+            } catch (fetchError) {
+                // If it's a quota or auth error, throw it immediately
+                if (fetchError.message && (fetchError.message.includes('Authentication') || 
+                    fetchError.message.includes('Quota') || 
+                    fetchError.message.includes('Rate Limit'))) {
+                    throw fetchError;
+                }
+                lastError = fetchError.message;
+                continue;
+            }
+        }
+        
+        // If we got a successful response, break out of API version loop
+        if (res && res.ok) {
+            break;
+        }
     }
     
-    if (!res.ok) {
-        const errorMsg = data.error?.message || data.message || JSON.stringify(data);
-        throw new Error(`Gemini API Error: ${res.status} ${res.statusText}. Model "${model}" may not be available. Try using "gemini-pro".\n${errorMsg}`);
+    if (!res || !res.ok) {
+        const errorMsg = lastError || data?.error?.message || data?.message || JSON.stringify(data);
+        
+        // Check for quota/rate limit errors first
+        if (res?.status === 429 || (errorMsg && (errorMsg.includes('quota') || errorMsg.includes('Quota exceeded')))) {
+            const retryAfterMatch = errorMsg.match(/retry in ([\d.]+)s/i);
+            const retryAfter = retryAfterMatch ? Math.ceil(parseFloat(retryAfterMatch[1])) : 60;
+            throw new Error(`Gemini API Quota Exceeded: ${errorMsg}\n\n⚠️ You've exceeded your free tier quota.\n\nOptions:\n1. Wait ${retryAfter} seconds and try again\n2. Enable billing in Google Cloud Console (free tier may require billing to be enabled)\n3. Check your usage: https://ai.dev/usage?tab=rate-limit\n4. Upgrade your plan if needed\n\nTo enable billing:\n- Go to: https://console.cloud.google.com/billing\n- Link a billing account (free tier is still free, but billing must be enabled)`);
+        }
+        
+        // Check if it's an API not enabled error
+        let helpText = "";
+        if (res?.status === 404 || (errorMsg && errorMsg.includes("not found"))) {
+            helpText = `
+            
+⚠️ IMPORTANT: The Gemini API may not be enabled for your project!
+
+Please follow these steps:
+1. Go to Google Cloud Console: https://console.cloud.google.com/
+2. Select your project
+3. Enable the Generative Language API:
+   - Go to: https://console.cloud.google.com/apis/library/generativelanguage.googleapis.com
+   - Click "ENABLE" button
+4. Wait a few minutes for the API to activate
+5. Verify your API key has access to the enabled API
+6. Try again
+
+Alternatively, if you're using Google AI Studio:
+- Make sure you're using the API key from: https://aistudio.google.com/app/apikey
+- The API should be automatically enabled for AI Studio keys`;
+        } else if (res?.status === 403) {
+            helpText = `
+            
+⚠️ Permission Error: Your API key may not have access to Gemini API.
+
+Please check:
+1. The API key is from the correct project
+2. The Generative Language API is enabled
+3. The API key has the correct permissions`;
+        }
+        
+        throw new Error(`Gemini API Error: Could not find an available model. Tried: ${modelVariants.join(", ")}. Error: ${errorMsg}${helpText}`);
     }
     
     // Extract text from Gemini response
@@ -491,14 +643,28 @@ ${text}
 // Listen for messages from popup
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'summarize') {
+        // Use async function and handle response properly
         (async () => {
+            let responseSent = false;
+            
+            const sendResponseSafe = (response) => {
+                if (!responseSent) {
+                    responseSent = true;
+                    try {
+                        sendResponse(response);
+                    } catch (error) {
+                        console.error('Error sending response:', error);
+                    }
+                }
+            };
+
             try {
                 // Get API key from storage
                 const result = await chrome.storage.local.get(['apiKey']);
                 const apiKey = result.apiKey;
 
                 if (!apiKey) {
-                    sendResponse({ 
+                    sendResponseSafe({ 
                         success: false, 
                         error: 'API key not set. Please configure your Gemini API key in the extension settings.' 
                     });
@@ -513,7 +679,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                     // Get active tab
                     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                     if (!tab || !tab.id) {
-                        sendResponse({ success: false, error: 'No active tab found' });
+                        sendResponseSafe({ success: false, error: 'No active tab found' });
                         return;
                     }
 
@@ -538,14 +704,26 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                             await new Promise(resolve => setTimeout(resolve, 500));
                             
                             // Send message to content script
-                            results = await chrome.tabs.sendMessage(tab.id, { action: 'extractContent' });
-                            if (results && results.content) {
-                                results = [{ result: results.content }];
+                            try {
+                                results = await chrome.tabs.sendMessage(tab.id, { action: 'extractContent' });
+                                if (results && results.content) {
+                                    results = [{ result: results.content }];
+                                }
+                            } catch (msgError) {
+                                console.error('Error sending message to content script:', msgError);
+                                sendResponseSafe({ 
+                                    success: false, 
+                                    error: 'Failed to communicate with content script. Make sure you are on a valid webpage.' 
+                                });
+                                return;
                             }
                         }
 
                         if (!results || !results[0] || !results[0].result) {
-                            sendResponse({ success: false, error: 'Failed to extract page content. Make sure you are on a valid webpage.' });
+                            sendResponseSafe({ 
+                                success: false, 
+                                error: 'Failed to extract page content. Make sure you are on a valid webpage.' 
+                            });
                             return;
                         }
 
@@ -562,7 +740,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                         }
                     } catch (error) {
                         console.error('Content extraction error:', error);
-                        sendResponse({ 
+                        sendResponseSafe({ 
                             success: false, 
                             error: `Failed to extract content: ${error.message}. Make sure you are on a page with viewable content.` 
                         });
@@ -571,14 +749,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 }
 
                 if (!text || !text.trim()) {
-                    sendResponse({ success: false, error: 'No content found on the page' });
+                    sendResponseSafe({ success: false, error: 'No content found on the page' });
                     return;
                 }
 
                 // Summarize the content
                 const summary = await summarizeNibiruAuto(text, context, {
                     apiKey,
-                    model: request.model || "gemini-pro",
+                    model: request.model || "gemini-1.5-flash-latest",
                     temperature: request.temperature || 0.3,
                     maxTokens: request.maxTokens || 1200
                 });
@@ -586,10 +764,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // Save summary to storage
                 await chrome.storage.local.set({ summary: summary });
 
-                sendResponse({ success: true, summary: summary });
+                sendResponseSafe({ success: true, summary: summary });
             } catch (error) {
                 console.error('Summarization error:', error);
-                sendResponse({ 
+                sendResponseSafe({ 
                     success: false, 
                     error: error.message || 'Failed to generate summary' 
                 });
@@ -598,5 +776,8 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
 
         return true; // Keep message channel open for async response
     }
+    
+    // Return false if we don't handle the message (but we handle 'summarize')
+    return false;
 });
 
