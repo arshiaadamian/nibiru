@@ -1,5 +1,5 @@
 // Background service worker for Nibiru extension
-// Handles OpenAI API calls for summarization
+// Handles Gemini API calls for summarization
 
 // Function to extract page content (runs in page context)
 function extractPageContent() {
@@ -165,7 +165,7 @@ function extractPageContent() {
 async function summarizeNibiruAuto(text, context, options = {}) {
     const {
         apiKey,
-        model = "gpt-4o-mini",
+        model = "gemini-pro",
         temperature = 0.3,
         maxTokens = 1200,
         preferClassifier = false,
@@ -173,7 +173,7 @@ async function summarizeNibiruAuto(text, context, options = {}) {
         rubricOnly = false
     } = options;
 
-    if (!apiKey) throw new Error("Missing OpenAI API key");
+    if (!apiKey) throw new Error("Missing Gemini API key");
     if (!text || !text.trim()) throw new Error("Empty source text");
 
     // Heuristic classifier (fast + offline)
@@ -205,21 +205,54 @@ SOURCE (snippet, may include HTML):
 ${body.slice(0, 2000)}
         `.trim();
 
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        // Try v1 endpoint first (more stable)
+        let url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
+        let res = await fetch(url, {
             method: "POST",
-            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-                model,
-                messages: [
-                    { role: "system", content: "You are a strict labeler that outputs one token only." },
-                    { role: "user", content: clsPrompt }
-                ],
-                temperature: 0.0,
-                max_tokens: 4
+                contents: [{
+                    parts: [{
+                        text: `You are a strict labeler that outputs one token only.\n\n${clsPrompt}`
+                    }]
+                }],
+                generationConfig: {
+                    temperature: 0.0,
+                    maxOutputTokens: 4
+                }
             })
         });
+        
         const data = await res.json();
-        const label = (data.choices?.[0]?.message?.content || "").trim().toUpperCase();
+        if (!res.ok) {
+            // If 404, try v1beta as fallback
+            if (res.status === 404) {
+                url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+                res = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        contents: [{
+                            parts: [{
+                                text: `You are a strict labeler that outputs one token only.\n\n${clsPrompt}`
+                            }]
+                        }],
+                        generationConfig: {
+                            temperature: 0.0,
+                            maxOutputTokens: 4
+                        }
+                    })
+                });
+                const fallbackData = await res.json();
+                if (!res.ok) {
+                    throw new Error(`Gemini API Error: ${res.status} ${res.statusText}. Model "${model}" not found. Try using "gemini-pro".\n${JSON.stringify(fallbackData)}`);
+                }
+                const label = (fallbackData.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
+                return label === "ASSIGNMENT" ? "ASSIGNMENT" : "GENERAL";
+            }
+            throw new Error(`Gemini API Error: ${res.status} ${res.statusText}\n${JSON.stringify(data)}`);
+        }
+        const label = (data.candidates?.[0]?.content?.parts?.[0]?.text || "").trim().toUpperCase();
         return label === "ASSIGNMENT" ? "ASSIGNMENT" : "GENERAL";
     }
 
@@ -401,26 +434,58 @@ ${text}
         `.trim();
     }
 
-    // Call OpenAI API
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    // Call Gemini API - try v1 endpoint first (more stable)
+    let url = `https://generativelanguage.googleapis.com/v1/models/${model}:generateContent?key=${apiKey}`;
+    let res = await fetch(url, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "Authorization": `Bearer ${apiKey}` },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-            model,
-            messages: [
-                { role: "system", content: "You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary." },
-                { role: "user", content: prompt }
-            ],
-            temperature,
-            max_tokens: maxTokens
+            contents: [{
+                parts: [{
+                    text: `You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary.\n\n${prompt}`
+                }]
+            }],
+            generationConfig: {
+                temperature: temperature,
+                maxOutputTokens: maxTokens
+            }
         })
     });
-
-    const data = await res.json();
-    if (!res.ok) {
-        throw new Error(`OpenAI API Error: ${res.status} ${res.statusText}\n${JSON.stringify(data)}`);
+    
+    let data = await res.json();
+    
+    // If 404, try v1beta as fallback
+    if (!res.ok && res.status === 404) {
+        url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+        res = await fetch(url, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [{
+                        text: `You are a helpful AI summarizer named Nibiru. Return only the requested sections in plain text (Markdown allowed), no extra commentary.\n\n${prompt}`
+                    }]
+                }],
+                generationConfig: {
+                    temperature: temperature,
+                    maxOutputTokens: maxTokens
+                }
+            })
+        });
+        data = await res.json();
     }
-    return (data.choices?.[0]?.message?.content || "").trim();
+    
+    if (!res.ok) {
+        const errorMsg = data.error?.message || data.message || JSON.stringify(data);
+        throw new Error(`Gemini API Error: ${res.status} ${res.statusText}. Model "${model}" may not be available. Try using "gemini-pro".\n${errorMsg}`);
+    }
+    
+    // Extract text from Gemini response
+    const responseText = data.candidates?.[0]?.content?.parts?.[0]?.text || "";
+    if (!responseText) {
+        throw new Error(`Gemini API returned empty response. Check API key and model availability.`);
+    }
+    return responseText.trim();
 }
 
 // Listen for messages from popup
@@ -435,7 +500,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 if (!apiKey) {
                     sendResponse({ 
                         success: false, 
-                        error: 'API key not set. Please configure your OpenAI API key in the extension settings.' 
+                        error: 'API key not set. Please configure your Gemini API key in the extension settings.' 
                     });
                     return;
                 }
@@ -513,7 +578,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
                 // Summarize the content
                 const summary = await summarizeNibiruAuto(text, context, {
                     apiKey,
-                    model: request.model || "gpt-4o-mini",
+                    model: request.model || "gemini-pro",
                     temperature: request.temperature || 0.3,
                     maxTokens: request.maxTokens || 1200
                 });

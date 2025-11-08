@@ -8,7 +8,6 @@ document.addEventListener("DOMContentLoaded", () => {
     const planetOverlay = document.getElementById("planetOverlay");
     const summarizeBtnContainer = document.getElementById("summarizeBtnContainer");
     const summarizeBtn = document.getElementById("summarizeBtn");
-    const readyToggle = document.getElementById("readyToggle");
     const settingsBtn = document.getElementById("settingsBtn");
     const settingsModal = document.getElementById("settingsModal");
     const closeSettings = document.getElementById("closeSettings");
@@ -33,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
             statusIcon.className = "bi bi-check-circle-fill";
             // Show summarize button when ready
             summarizeBtnContainer.style.display = "flex";
-            readyToggle.checked = true;
             // Show planet animation when status becomes ready (but not on initial load)
             if (showAnimation && !isInitialLoad) {
                 showPlanetAnimation(2000);
@@ -45,11 +43,10 @@ document.addEventListener("DOMContentLoaded", () => {
             statusIcon.className = "bi bi-x-circle-fill";
             // Hide summarize button when not ready
             summarizeBtnContainer.style.display = "none";
-            readyToggle.checked = false;
         }
     }
     
-    // Check if extension is ready (has API key and active tab)
+    // Check if extension is ready (has API key and can access page content)
     async function checkStatus(showAnimation = false) {
         try {
             // Check if API key is set
@@ -58,6 +55,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
             if (!hasApiKey) {
                 setStatus(false, showAnimation);
+                statusText.textContent = "API Key Not Set";
                 return;
             }
 
@@ -66,6 +64,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
                 if (!tab || !tab.id) {
                     setStatus(false, showAnimation);
+                    statusText.textContent = "No Active Tab";
                     return;
                 }
 
@@ -74,18 +73,51 @@ document.addEventListener("DOMContentLoaded", () => {
                 if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || 
                     url.startsWith('edge://') || url.startsWith('about:') || url === '') {
                     setStatus(false, showAnimation);
+                    statusText.textContent = "Invalid Page";
                     return;
                 }
 
-                // Extension is ready
-                setStatus(true, showAnimation);
+                // Try to verify we can access the page content
+                // This is a quick check - if we can inject a script, the page is accessible
+                try {
+                    // Quick content check - try to see if page has content
+                    await chrome.scripting.executeScript({
+                        target: { tabId: tab.id },
+                        func: () => {
+                            // Quick check if page has meaningful content
+                            const body = document.body;
+                            if (!body) return false;
+                            const text = body.innerText || body.textContent || '';
+                            return text.trim().length > 50; // At least 50 characters
+                        }
+                    }).then((results) => {
+                        if (results && results[0] && results[0].result) {
+                            // Page has content, extension is ready
+                            setStatus(true, showAnimation);
+                        } else {
+                            setStatus(false, showAnimation);
+                            statusText.textContent = "No Content Detected";
+                        }
+                    }).catch((error) => {
+                        // Can't access page (might be restricted), but URL is valid
+                        // Still allow summarization attempt - it might work
+                        console.log('Content check failed, but allowing attempt:', error);
+                        setStatus(true, showAnimation);
+                    });
+                } catch (error) {
+                    // If we can't check content, but URL is valid, allow it
+                    console.log('Could not verify content, but URL is valid:', error);
+                    setStatus(true, showAnimation);
+                }
             } catch (error) {
                 console.error('Error checking tab:', error);
                 setStatus(false, showAnimation);
+                statusText.textContent = "Error Checking Page";
             }
         } catch (error) {
             console.error('Error checking status:', error);
             setStatus(false, showAnimation);
+            statusText.textContent = "Error";
         }
     }
     
@@ -451,7 +483,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <i class="bi bi-exclamation-triangle-fill"></i>
                     <p><strong>Error:</strong> ${errorMessage}</p>
                     ${errorMessage.includes('API key') ? 
-                        '<p style="font-size: 12px; margin-top: 8px;">Please set your OpenAI API key in the extension settings.</p>' : 
+                        '<p style="font-size: 12px; margin-top: 8px;">Please set your Gemini API key in the extension settings.</p>' : 
                         ''}
                 </div>
             `;
@@ -466,12 +498,6 @@ document.addEventListener("DOMContentLoaded", () => {
         summarizeBtn.style.cursor = "pointer";
         summarizeBtn.style.opacity = "1";
     }
-    
-    // Test toggle for ready status
-    readyToggle.addEventListener("change", (e) => {
-        const isReady = e.target.checked;
-        setStatus(isReady, true);
-    });
     
     // Listen for messages from content script or background
     if (chrome && chrome.runtime) {
@@ -497,7 +523,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 apiKeyInput.placeholder = "API key is set (enter new key to update)";
                 apiKeyInput.value = '';
             } else {
-                apiKeyInput.placeholder = "sk-...";
+                apiKeyInput.placeholder = "AI...";
                 apiKeyInput.value = '';
             }
         });
@@ -523,9 +549,9 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
-        // Basic validation
-        if (!apiKey.startsWith('sk-')) {
-            showToast("Invalid API key format (should start with 'sk-')");
+        // Basic validation - Gemini API keys typically start with 'AI' or are longer
+        if (apiKey.length < 20) {
+            showToast("Invalid API key format. Gemini API keys are typically longer.");
             return;
         }
 
@@ -534,7 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
             settingsModal.style.display = "none";
             // Clear input for security
             apiKeyInput.value = '';
-            apiKeyInput.placeholder = "sk-...";
+            apiKeyInput.placeholder = "AI...";
             // Check status again
             checkStatus();
         });
