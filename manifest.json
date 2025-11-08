@@ -1,14 +1,18 @@
 {
   "manifest_version": 3,
-  "name": "Quick Summary",
+  "name": "Nibiru - BCIT Summary Assistant",
   "version": "1.0.0",
-  "description": "A beautiful Chrome extension for quick document summaries",
+  "description": "A summarizing Chrome extension for BCIT students",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Quick Summary"
+    "default_title": "Nibiru - BCIT Summary"
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net;"
   }
 }
 
