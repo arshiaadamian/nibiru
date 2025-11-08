@@ -5,14 +5,21 @@
   "description": "A summarizing Chrome extension for BCIT students",
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://api.openai.com/*"
   ],
   "action": {
     "default_popup": "popup.html",
     "default_title": "Nibiru - BCIT Summary"
   },
+  "background": {
+    "service_worker": "background.js"
+  },
   "content_security_policy": {
-    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net;"
+    "extension_pages": "script-src 'self'; style-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; font-src 'self' https://cdn.jsdelivr.net; img-src 'self' https://cdn-icons-png.flaticon.com data:; connect-src 'self' https://api.openai.com;"
   }
 }
 

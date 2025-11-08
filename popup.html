@@ -19,10 +19,35 @@
           <p class="subtitle">BCIT Summary Assistant</p>
         </div>
       </div>
-      <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
-        <i class="bi bi-moon-fill"></i>
-      </button>
+      <div class="header-actions">
+        <button id="settingsBtn" class="icon-btn" aria-label="Settings" title="Settings">
+          <i class="bi bi-gear-fill"></i>
+        </button>
+        <button id="themeToggle" class="theme-toggle" aria-label="Toggle theme">
+          <i class="bi bi-moon-fill"></i>
+        </button>
+      </div>
     </header>
+    
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="settings-modal" style="display: none;">
+      <div class="settings-content">
+        <div class="settings-header">
+          <h2>Settings</h2>
+          <button id="closeSettings" class="icon-btn">
+            <i class="bi bi-x"></i>
+          </button>
+        </div>
+        <div class="settings-body">
+          <div class="settings-field">
+            <label for="apiKeyInput">OpenAI API Key</label>
+            <input type="password" id="apiKeyInput" placeholder="sk-..." />
+            <p class="settings-hint">Your API key is stored locally and never shared.</p>
+          </div>
+          <button id="saveApiKey" class="save-btn">Save API Key</button>
+        </div>
+      </div>
+    </div>
 
     <div class="status-section">
       <div id="statusIndicator" class="status-indicator not-ready">
@@ -87,9 +112,9 @@
             </div>
           </div>
           <p class="loading-text">
-            <span class="loading-text-glow">Generating summary</span>
-            <span class="loading-progress" id="loadingProgress">0%</span>
+            <span class="loading-text-glow">Generating summary...</span>
           </p>
+          <div class="rocket-progress" id="loadingProgress">0%</div>
         </div>
         <div id="summaryArea" class="summary-text">
           <div class="empty-state">

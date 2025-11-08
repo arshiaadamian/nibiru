@@ -9,6 +9,11 @@ document.addEventListener("DOMContentLoaded", () => {
     const summarizeBtnContainer = document.getElementById("summarizeBtnContainer");
     const summarizeBtn = document.getElementById("summarizeBtn");
     const readyToggle = document.getElementById("readyToggle");
+    const settingsBtn = document.getElementById("settingsBtn");
+    const settingsModal = document.getElementById("settingsModal");
+    const closeSettings = document.getElementById("closeSettings");
+    const apiKeyInput = document.getElementById("apiKeyInput");
+    const saveApiKeyBtn = document.getElementById("saveApiKey");
     let isInitialLoad = true;
     
     // Planet animation control
@@ -44,30 +49,74 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    // Initialize status (you can change this based on your logic)
-    // For now, checking if there's content to summarize
-    function checkStatus(showAnimation = false) {
-        const placeholder = summaryArea.querySelector(".empty-state");
-        const hasContent = !placeholder && summaryArea.textContent.trim() !== "" && 
-                          summaryArea.textContent.trim() !== "No summary available yet. Navigate to a document or webpage to generate a summary.";
-        setStatus(hasContent, showAnimation);
+    // Check if extension is ready (has API key and active tab)
+    async function checkStatus(showAnimation = false) {
+        try {
+            // Check if API key is set
+            const result = await chrome.storage.local.get(['apiKey']);
+            const hasApiKey = result.apiKey && result.apiKey.trim() !== '';
+
+            if (!hasApiKey) {
+                setStatus(false, showAnimation);
+                return;
+            }
+
+            // Check if we have an active tab
+            try {
+                const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+                if (!tab || !tab.id) {
+                    setStatus(false, showAnimation);
+                    return;
+                }
+
+                // Check if tab URL is valid (not chrome://, chrome-extension://, etc.)
+                const url = tab.url || '';
+                if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') || 
+                    url.startsWith('edge://') || url.startsWith('about:') || url === '') {
+                    setStatus(false, showAnimation);
+                    return;
+                }
+
+                // Extension is ready
+                setStatus(true, showAnimation);
+            } catch (error) {
+                console.error('Error checking tab:', error);
+                setStatus(false, showAnimation);
+            }
+        } catch (error) {
+            console.error('Error checking status:', error);
+            setStatus(false, showAnimation);
+        }
     }
     
     // Function to update summary content
-    function updateSummary(text) {
+    function updateSummary(text, showAnimation = false) {
         const emptyState = summaryArea.querySelector(".empty-state");
         if (emptyState) {
             emptyState.remove();
         }
         
         if (text && text.trim()) {
-            // Show planet animation when generating summary
-            showPlanetAnimation(2500);
-            // Delay the content update slightly to show animation
-            setTimeout(() => {
-                summaryArea.innerHTML = `<p>${text}</p>`;
+            // Show planet animation when generating summary (only if requested)
+            if (showAnimation) {
+                showPlanetAnimation(2500);
+                setTimeout(() => {
+                    // Convert markdown to HTML (simple conversion)
+                    const htmlText = convertMarkdownToHTML(text);
+                    summaryArea.innerHTML = `<div class="summary-content">${htmlText}</div>`;
+                    checkStatus(true);
+                }, 500);
+            } else {
+                // Convert markdown to HTML
+                const htmlText = convertMarkdownToHTML(text);
+                summaryArea.innerHTML = `<div class="summary-content">${htmlText}</div>`;
                 checkStatus(true);
-            }, 500);
+            }
+            
+            // Save to storage
+            if (chrome && chrome.storage) {
+                chrome.storage.local.set({ summary: text });
+            }
         } else {
             summaryArea.innerHTML = `
                 <div class="empty-state">
@@ -77,6 +126,45 @@ document.addEventListener("DOMContentLoaded", () => {
             `;
             checkStatus(false);
         }
+    }
+    
+    // Simple markdown to HTML converter
+    function convertMarkdownToHTML(markdown) {
+        let html = markdown;
+        
+        // Headers
+        html = html.replace(/^### (.*$)/gim, '<h3>$1</h3>');
+        html = html.replace(/^## (.*$)/gim, '<h2>$1</h2>');
+        html = html.replace(/^# (.*$)/gim, '<h1>$1</h1>');
+        
+        // Bold
+        html = html.replace(/\*\*(.*?)\*\*/gim, '<strong>$1</strong>');
+        
+        // Italic
+        html = html.replace(/\*(.*?)\*/gim, '<em>$1</em>');
+        
+        // Lists
+        html = html.replace(/^- (.*$)/gim, '<li>$1</li>');
+        html = html.replace(/^\d+\. (.*$)/gim, '<li>$1</li>');
+        
+        // Wrap consecutive list items in ul/ol
+        html = html.replace(/(<li>.*<\/li>\n?)+/gim, (match) => {
+            return '<ul>' + match + '</ul>';
+        });
+        
+        // Paragraphs (lines that aren't headers or lists)
+        html = html.split('\n').map(line => {
+            line = line.trim();
+            if (line && !line.startsWith('<') && !line.match(/^#/)) {
+                return '<p>' + line + '</p>';
+            }
+            return line;
+        }).join('\n');
+        
+        // Code blocks (simple)
+        html = html.replace(/`(.*?)`/gim, '<code>$1</code>');
+        
+        return html;
     }
     
     // Theme management
@@ -92,7 +180,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
     
-    // Load saved theme
+    // Load saved theme and summary
     if (chrome && chrome.storage) {
         chrome.storage.local.get("theme", (result) => {
             const theme = result.theme || "dark";
@@ -100,12 +188,12 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         
         // Load saved summary if any
-        chrome.storage.local.get("summary", (result) => {
+        chrome.storage.local.get("summary", async (result) => {
             if (result.summary) {
                 updateSummary(result.summary);
-            } else {
-                checkStatus(false);
             }
+            // Check status (API key and tab availability)
+            await checkStatus(false);
             isInitialLoad = false;
         });
     } else {
@@ -203,10 +291,25 @@ document.addEventListener("DOMContentLoaded", () => {
             rocketContainer.classList.remove("complete");
         }
         
-        // Progress-based animation
+        // Start actual summarization
+        startSummarization();
+    });
+    
+    // Function to start summarization with progress tracking
+    async function startSummarization() {
+        const loadingBar = document.getElementById("loadingBar");
+        const rocketContainer = loadingBar.querySelector("#rocketContainer");
+        const loadingProgress = document.getElementById("loadingProgress");
+        const startTime = Date.now();
+        const totalDuration = 15000; // Estimate 15 seconds for API call
+        let progress = 0;
+        let animationComplete = false;
+        
+        // Start progress animation (visual feedback)
         const updateProgress = () => {
             const elapsed = Date.now() - startTime;
-            progress = Math.min((elapsed / totalDuration) * 100, 100);
+            // Animate progress smoothly, but cap at 90% until API call completes
+            progress = Math.min((elapsed / totalDuration) * 90, 90);
             
             // Update rocket position based on progress
             if (rocketContainer) {
@@ -235,58 +338,134 @@ document.addEventListener("DOMContentLoaded", () => {
                 loadingProgress.textContent = `${Math.round(progress)}%`;
             }
             
-            if (progress < 100) {
+            if (!animationComplete) {
                 requestAnimationFrame(updateProgress);
-            } else {
-                // Slow down slightly before completion if loading was quick
-                if (elapsed < totalDuration * 0.8) {
-                    setTimeout(() => {
-                        completeLoading();
-                    }, 200);
-                } else {
-                    completeLoading();
-                }
             }
         };
         
-        const completeLoading = () => {
-            // Trigger completion animation
+        // Start animation
+        requestAnimationFrame(updateProgress);
+        
+        // Call background script to summarize
+        try {
+            chrome.runtime.sendMessage({ 
+                action: 'summarize'
+            }, (response) => {
+                animationComplete = true;
+                
+                if (chrome.runtime.lastError) {
+                    console.error('Runtime error:', chrome.runtime.lastError);
+                    handleSummarizationError(chrome.runtime.lastError.message);
+                    return;
+                }
+                
+                if (response && response.success) {
+                    // Complete the animation to 100%
+                    completeAnimation(100, () => {
+                        // Hide loading bar and show summary
+                        if (loadingBar) loadingBar.style.display = "none";
+                        if (summaryArea) {
+                            summaryArea.style.display = "block";
+                            updateSummary(response.summary, false);
+                        }
+                        showToast("Summary generated!");
+                        checkStatus();
+                        
+                        // Re-enable button
+                        isGenerating = false;
+                        summarizeBtn.disabled = false;
+                        summarizeBtn.style.cursor = "pointer";
+                        summarizeBtn.style.opacity = "1";
+                    });
+                } else {
+                    handleSummarizationError(response?.error || 'Failed to generate summary');
+                }
+            });
+        } catch (error) {
+            animationComplete = true;
+            console.error('Summarization error:', error);
+            handleSummarizationError(error.message);
+        }
+    }
+    
+    // Function to complete animation to 100%
+    function completeAnimation(targetProgress, callback) {
+        const loadingBar = document.getElementById("loadingBar");
+        const rocketContainer = loadingBar.querySelector("#rocketContainer");
+        const loadingProgress = document.getElementById("loadingProgress");
+        const startTime = Date.now();
+        const duration = 500; // 500ms to animate to 100%
+        
+        const animate = () => {
+            const elapsed = Date.now() - startTime;
+            const progress = Math.min((elapsed / duration) * (targetProgress - 90) + 90, targetProgress);
+            
             if (rocketContainer) {
-                rocketContainer.classList.add("complete");
+                const sceneWidth = loadingBar.querySelector(".space-scene").offsetWidth;
+                const rocketPosition = (progress / 100) * (sceneWidth + 20) - 10;
+                rocketContainer.style.left = `${rocketPosition}px`;
             }
             
-            // Wait for animation to complete, then show summary
-            setTimeout(() => {
-                const sampleSummary = "This is a sample summary generated by Nibiru. The extension is working correctly and ready to summarize BCIT course materials, documents, and web pages. The ancient planet animation represents the mystical power of Nibiru, bringing knowledge from the cosmos to BCIT students.";
-                
-                // Hide loading bar and show summary
-                if (loadingBar) loadingBar.style.display = "none";
-                if (summaryArea) {
-                    summaryArea.style.display = "block";
-                    updateSummary(sampleSummary, false);
-                }
-                showToast("Summary generated!");
-                
-                // Reset rocket container for next use
+            if (loadingProgress) {
+                loadingProgress.textContent = `${Math.round(progress)}%`;
+            }
+            
+            if (progress < targetProgress) {
+                requestAnimationFrame(animate);
+            } else {
+                // Trigger completion animation
                 if (rocketContainer) {
-                    rocketContainer.classList.remove("complete");
-                    rocketContainer.style.left = "-10px";
-                }
-                if (loadingProgress) {
-                    loadingProgress.textContent = "0%";
+                    rocketContainer.classList.add("complete");
                 }
                 
-                // Re-enable button after animation completes
-                isGenerating = false;
-                summarizeBtn.disabled = false;
-                summarizeBtn.style.cursor = "pointer";
-                summarizeBtn.style.opacity = "1";
-            }, 1000);
+                // Wait for completion animation, then callback
+                setTimeout(() => {
+                    if (rocketContainer) {
+                        rocketContainer.classList.remove("complete");
+                        rocketContainer.style.left = "-10px";
+                    }
+                    if (loadingProgress) {
+                        loadingProgress.textContent = "0%";
+                    }
+                    if (callback) callback();
+                }, 1000);
+            }
         };
         
-        // Start progress animation
-        requestAnimationFrame(updateProgress);
-    });
+        animate();
+    }
+    
+    // Function to handle summarization errors
+    function handleSummarizationError(errorMessage) {
+        const loadingBar = document.getElementById("loadingBar");
+        const summaryArea = document.getElementById("summaryArea");
+        
+        // Hide loading bar
+        if (loadingBar) loadingBar.style.display = "none";
+        
+        // Show error in summary area
+        if (summaryArea) {
+            summaryArea.style.display = "block";
+            summaryArea.innerHTML = `
+                <div class="empty-state" style="color: #ef4444;">
+                    <i class="bi bi-exclamation-triangle-fill"></i>
+                    <p><strong>Error:</strong> ${errorMessage}</p>
+                    ${errorMessage.includes('API key') ? 
+                        '<p style="font-size: 12px; margin-top: 8px;">Please set your OpenAI API key in the extension settings.</p>' : 
+                        ''}
+                </div>
+            `;
+        }
+        
+        showToast("Failed to generate summary");
+        checkStatus();
+        
+        // Re-enable button
+        isGenerating = false;
+        summarizeBtn.disabled = false;
+        summarizeBtn.style.cursor = "pointer";
+        summarizeBtn.style.opacity = "1";
+    }
     
     // Test toggle for ready status
     readyToggle.addEventListener("change", (e) => {
@@ -308,6 +487,59 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
     
+    // Settings modal
+    settingsBtn.addEventListener("click", () => {
+        settingsModal.style.display = "flex";
+        // Check if API key exists
+        chrome.storage.local.get(['apiKey'], (result) => {
+            if (result.apiKey && result.apiKey.trim()) {
+                // Show placeholder indicating key is set
+                apiKeyInput.placeholder = "API key is set (enter new key to update)";
+                apiKeyInput.value = '';
+            } else {
+                apiKeyInput.placeholder = "sk-...";
+                apiKeyInput.value = '';
+            }
+        });
+    });
+
+    closeSettings.addEventListener("click", () => {
+        settingsModal.style.display = "none";
+    });
+
+    // Close modal when clicking outside
+    settingsModal.addEventListener("click", (e) => {
+        if (e.target === settingsModal) {
+            settingsModal.style.display = "none";
+        }
+    });
+
+    // Save API key
+    saveApiKeyBtn.addEventListener("click", () => {
+        const apiKey = apiKeyInput.value.trim();
+        
+        if (!apiKey) {
+            showToast("Please enter an API key");
+            return;
+        }
+
+        // Basic validation
+        if (!apiKey.startsWith('sk-')) {
+            showToast("Invalid API key format (should start with 'sk-')");
+            return;
+        }
+
+        chrome.storage.local.set({ apiKey: apiKey }, () => {
+            showToast("API key saved!");
+            settingsModal.style.display = "none";
+            // Clear input for security
+            apiKeyInput.value = '';
+            apiKeyInput.placeholder = "sk-...";
+            // Check status again
+            checkStatus();
+        });
+    });
+
     // Initial status check
     checkStatus();
 });
